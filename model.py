@@ -1,11 +1,11 @@
 from dataclasses import dataclass, field
-from typing import Dict, Sequence, Optional
+from enum import Enum
+from typing import Dict, Optional, Sequence
 
 import torch
-from torch import nn, Tensor
-from torchvision.models.segmentation import deeplabv3_resnet50, deeplabv3_resnet101
-from enum import Enum
-
+from torch import Tensor, nn
+from torchvision.models.segmentation import (deeplabv3_resnet50,
+                                             deeplabv3_resnet101)
 from yamldataclassconfig import YamlDataClassConfig
 
 
@@ -28,6 +28,8 @@ class ModelConfiguration(YamlDataClassConfig):
 
 
 class DeepLabSegmeter(nn.Module):
+    """Model for segmentation."""
+
     def __init__(
         self,
         backbone: Backbone,
@@ -37,8 +39,20 @@ class DeepLabSegmeter(nn.Module):
         heads_segmentation: Dict[str, int] = None,
         heads_global: Dict[str, int] = None,
     ):
+        """Constructor of the segmentation model.
+
+        Args:
+            backbone: Which backbone to use (resnet50 or resnet101).
+            pretrained_backbone: Use imagenet pretrained resnet if True.
+            feat_map_n_dims: Number of dimensions of the feature map (this is the output of the DeepLabV3,
+                this feature map can be used by multiple heads for multi-task learning)
+            input_dim: number of channels of the input.
+            heads_segmentation: Mapping of the name of the pixel-wise head and the number of dimensions.
+            heads_global: Mapping of the name of the global head and the number of dimensions.
+        """
         super().__init__()
 
+        # number of dimensions of the resnet.
         self.global_n_dims = 2048
 
         # initialize segmentation model

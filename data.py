@@ -3,21 +3,19 @@ from dataclasses import dataclass, field
 from enum import Enum, IntEnum, auto
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Sequence, Optional, List, Any
+from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import torch
 from PIL import Image
-from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS
+from pytorch_lightning.utilities.types import (EVAL_DATALOADERS,
+                                               TRAIN_DATALOADERS)
 from torch import Tensor, nn
-from torch.utils.data import Dataset, ConcatDataset, Subset, DataLoader
+from torch.utils.data import ConcatDataset, DataLoader, Dataset, Subset
 from torchvision import transforms
-from torchvision.transforms.functional import (
-    pil_to_tensor,
-    InterpolationMode,
-)
+from torchvision.transforms.functional import InterpolationMode, pil_to_tensor
 from yamldataclassconfig import YamlDataClassConfig, build_path
 
 
@@ -81,17 +79,31 @@ class DataloaderConfig(YamlDataClassConfig):
             ]
 
 
-class SatoriusDataset(torch.utils.data.Dataset):
+class SatoriusDataset(Dataset):
     def __init__(
         self, root: Path, partition: Partition, outputs: Sequence[DataOutputs] = None
-    ):
+    ) -> None:
+        """Satorius dataset as given by the challenger.
+
+        More info: https://www.kaggle.com/c/sartorius-cell-instance-segmentation/data
+
+        Args:
+            root: root to the dataset. It is expected to containing sub-folders with test and training data and the
+                annotations in a `train.csv` file.
+            partition: train / eval or test partition.
+            outputs: which outputs to load and return in __get_item__(). If None is give, then it defaults to all
+                available outputs.
+        """
         self.path_csv = root / "train.csv"
         self.partition = partition
         self.path_imgs = root / (
             partition.value if partition != Partition.Eval else Partition.Train.value
         )
+
+        # load annotations
         self.df_ann = self.load_csv()
 
+        # Get outputs
         if outputs is None:
             if partition == Partition.Test:
                 self.outputs = [DataOutputs.Image]
@@ -100,12 +112,30 @@ class SatoriusDataset(torch.utils.data.Dataset):
         else:
             self.outputs = set(outputs)
 
-    def load_csv(self):
+    def load_csv(self) -> None:
 
+        # The test partition has no annotation data!
         if self.partition == Partition.Test:
             ids = [id_.replace(".png", "") for id_ in os.listdir(self.path_imgs)]
             return pd.DataFrame(columns=["id"], data=ids)
 
+        # Eval and Training data are in the same csv.
+        df_train = pd.read_csv(self.path_csv)
+
+        # Convert their wierd annotation format into something useful.
+        # 1. group all the annotations relevant to the same image.
+        df_ann = (
+            df_train.groupby(["id", "cell_type"])["annotation"]
+            .agg(list)
+            .reset_index(drop=False)
+        )
+
+        # 2. Convert the string annotations into integers.
+        df_ann["annotation"] = df_ann["annotation"].apply(
+            lambda x: [int(item) for sublist in x for item in sublist.split()]
+        )
+
+        # 3. Convert their 'running pixel' into sequences of pixels in a flat image.
         def running_pixels(ann_):
             start_end = [
                 (start - 1, start - 1 + stroke)
@@ -113,16 +143,9 @@ class SatoriusDataset(torch.utils.data.Dataset):
             ]
             return [pix for start, end in start_end for pix in range(start, end)]
 
-        df_train = pd.read_csv(self.path_csv)
-        df_ann = (
-            df_train.groupby(["id", "cell_type"])["annotation"]
-            .agg(list)
-            .reset_index(drop=False)
-        )
-        df_ann["annotation"] = df_ann["annotation"].apply(
-            lambda x: [int(item) for sublist in x for item in sublist.split()]
-        )
         df_ann["pixels"] = df_ann["annotation"].apply(running_pixels)
+
+        # Not so random split of train and eval
         train_limit = len(df_ann) // 10
 
         if self.partition == Partition.Train:
@@ -131,7 +154,15 @@ class SatoriusDataset(torch.utils.data.Dataset):
         if self.partition == Partition.Eval:
             return df_ann[-train_limit:].reset_index(inplace=False)
 
-    def get_sampling_weights(self, strategy):
+    def get_sampling_weights(self, strategy: SamplingStrategy) -> List[float]:
+        """Different sampling strategies.
+
+        Args:
+            strategy: the strategy to be used.
+
+        Returns:
+            a list with the sampling weights of each data sample.
+        """
 
         if (strategy == SamplingStrategy.Uniform) or (self.partition == Partition.Test):
             return [1 for __ in range(self.df_ann)]
@@ -151,27 +182,44 @@ class SatoriusDataset(torch.utils.data.Dataset):
         return len(self.df_ann)
 
     @staticmethod
-    def get_mask(img, running_pixels):
+    def get_mask(img: Tensor, running_pixels: List[int]) -> Tensor:
+        """Get a mask from an image and the flat pixel sequence.
+
+        Args:
+            img: the image for the mask.
+            running_pixels: Flat list with the pixel indexes of a flat image.
+
+        Returns:
+            A binary mask with the same shape of the input image.
+        """
+
         mask_flat = torch.zeros_like(img.view(-1))
         mask_flat[running_pixels] = 1
+
         return mask_flat.reshape(img.shape)
 
     @lru_cache(maxsize=1024)
     def __getitem__(self, index: int) -> Dict[DataOutputs, Tensor]:
+        """Fetch one item."""
 
+        # Load image
         img_path = self.path_imgs / f"{self.df_ann.loc[index, 'id']}.png"
         img = pil_to_tensor(Image.open(img_path)) / 255.0
 
+        # Selects the outputs
         output_data = {}
         if DataOutputs.Image in self.outputs:
+            # Add image to the output.
             output_data[DataOutputs.Image] = img
 
         if DataOutputs.Mask in self.outputs:
+            # Add mask to the output.
             output_data[DataOutputs.Mask] = self.get_mask(
                 img, self.df_ann.loc[index, "pixels"]
             )
 
         if DataOutputs.Label in self.outputs:
+            # add the global label of the image to the output.
             output_data[DataOutputs.Label] = SartoriusClasses[
                 self.df_ann.loc[index, "cell_type"]
             ].value
@@ -187,6 +235,8 @@ class GenericDataModule(pl.LightningDataModule):
         configuration_eval: DataloaderConfig,
         configuration_test: DataloaderConfig,
     ):
+        """Constructor of the data module."""
+
         super().__init__()
 
         # passes configurations to self
@@ -206,7 +256,24 @@ class GenericDataModule(pl.LightningDataModule):
         self.dataset_test = None
 
     @staticmethod
-    def _make_dataset(datasets_not_init, batch_size, subset=None, **kwargs):
+    def _make_dataset(
+        datasets_not_init: List[Dataset],
+        batch_size: int,
+        subset: Optional[int] = None,
+        **kwargs,
+    ):
+        """Initialize multiple datasets and concatenate them into one dataset.
+
+        Args:
+            datasets_not_init: List of not initialized dataset classes.
+            batch_size: the batch size.
+            subset: the number of data points to consider instead of using the all the data of the dataset. If multiple
+                datasets are given, each dataset will participate equality. Eg, if subset = 10 and there are two
+                dataset, each one will contribute with 5 data samples.
+                Additionally, the contribution of each dataset should be of one batch. If batch_size = 8 and
+                subset = 10, then each dataset will contribute with 8 samples.
+        """
+
         datasets_ = []
         for dataset_ in datasets_not_init:
             datasets_.append(dataset_(**kwargs))
@@ -218,6 +285,7 @@ class GenericDataModule(pl.LightningDataModule):
         return ConcatDataset(datasets_)
 
     def setup(self, stage: Optional[str] = None) -> None:
+        """Initialize the datasets."""
 
         if stage in (None, "fit"):
             self.dataset_train = self._make_dataset(
@@ -285,7 +353,7 @@ class GenericDataModule(pl.LightningDataModule):
 
     @staticmethod
     def transform_identity():
-        return transforms.Lambda(lambda x: x)
+        return nn.Identity()
 
     @staticmethod
     def transform_random_affine(p):
@@ -306,6 +374,7 @@ class GenericDataModule(pl.LightningDataModule):
         return transforms.Lambda(lambda x: x)
 
     def define_augmentations(self, p, img_size):
+        """Define the augmentations for this batch."""
 
         if np.random.rand() > p:
             return transforms.RandomCrop(
@@ -328,24 +397,30 @@ class GenericDataModule(pl.LightningDataModule):
         return augmentations
 
     def on_before_batch_transfer(self, batch: Any, dataloader_idx: int) -> Any:
+        """Operations before batch is transferred to GPU."""
 
         if self.trainer.training and self.config_train.p_random_transforms:
+            # concatenates image and mask in the channel dimension.
             img_mask = torch.cat(
                 (batch[DataOutputs.Image], batch[DataOutputs.Mask]), dim=1
             )
+
+            # Augment the image.
+            # :warning: **augmentations that alter pixel values will also alter the mask.**
             img_mask = self.define_augmentations(
                 p=self.config_train.p_random_transforms,
                 img_size=self.config_train.img_size,
             )(img_mask)
+
+            # splits the augmented image into image and mask again.
             batch[DataOutputs.Image], batch[DataOutputs.Mask] = torch.split(
                 img_mask, split_size_or_sections=1, dim=1
             )
 
         return batch
 
-if __name__ == "__main__":
 
-    from torch.utils.data import DataLoader
+if __name__ == "__main__":
 
     loader_train = DataLoader(
         SatoriusDataset(root=Path("./data/"), partition=Partition.Train),
