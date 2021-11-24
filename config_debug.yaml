@@ -1,0 +1,47 @@
+training:
+  random_seed: 24
+  n_gpus: '6'
+  log_every_n_steps: 10
+  gradient_clip_val: 0.5
+  max_steps: 100000
+  num_sanity_val_steps: 2
+  track_grad_norm: 'inf'
+  resume_from_checkpoint: './lightning_logs/version_11/checkpoints/epoch=315-step=5371-eval score=0.34.ckpt'
+
+dataloader_global:
+  num_workers: 0
+
+dataloader_train:
+  dataset_root: "../data/"
+  outputs:
+    - "Image"
+    - "Mask"
+  img_size: 256
+  batch_size: 64
+  p_random_transforms: 0.5
+
+dataloader_eval:
+  dataset_root: "../data/"
+  outputs:
+    - "Image"
+    - "Mask"
+  img_size: -1
+  batch_size: 8
+  p_random_transforms: 0
+
+dataloader_test:
+  dataset_root: "../data/"
+  outputs:
+    - "Image"
+  img_size: -1
+  batch_size: 3
+  p_random_transforms: 0
+
+model:
+  feat_map_n_dim: 128
+  input_dim: 1
+  backbone: R50
+  pretrained_backbone: True
+  heads_segmentation:
+    mask: 1
+
