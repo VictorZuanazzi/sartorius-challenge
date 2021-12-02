@@ -18,6 +18,8 @@ from torchvision import transforms
 from torchvision.transforms.functional import InterpolationMode, pil_to_tensor
 from yamldataclassconfig import YamlDataClassConfig, build_path
 
+from generate_submissionfile import tensor2submissionrow
+
 
 class Partition(Enum):
     Train = "train"
@@ -83,6 +85,8 @@ class SatoriusDataset(Dataset):
     def __init__(
         self, root: Path, partition: Partition, outputs: Sequence[DataOutputs] = None
     ) -> None:
+
+
         """Satorius dataset as given by the challenger.
 
         More info: https://www.kaggle.com/c/sartorius-cell-instance-segmentation/data
@@ -128,12 +132,17 @@ class SatoriusDataset(Dataset):
             df_train.groupby(["id", "cell_type"])["annotation"]
             .agg(list)
             .reset_index(drop=False)
+            .apply(lambda x: ' '.join(x))
+            .apply(lambda x: [int(item) for item in x])
         )
 
+        # print(df_ann)
+        # exit(0)
+
+        # tensor2submissionrow()
+
         # 2. Convert the string annotations into integers.
-        df_ann["annotation"] = df_ann["annotation"].apply(
-            lambda x: [int(item) for sublist in x for item in sublist.split()]
-        )
+        # df_ann["annotation"] = df_ann["annotation"].apply(lambda x: [int(item) for sublist in x for item in sublist.split()])
 
         # 3. Convert their 'running pixel' into sequences of pixels in a flat image.
         def running_pixels(ann_):
@@ -141,9 +150,31 @@ class SatoriusDataset(Dataset):
                 (start - 1, start - 1 + stroke)
                 for start, stroke in zip(ann_[::2], ann_[1:][::2])
             ]
+
+            breakpoint()
+
             return [pix for start, end in start_end for pix in range(start, end)]
 
         df_ann["pixels"] = df_ann["annotation"].apply(running_pixels)
+
+        img_path = self.path_imgs / f"{df_ann.loc[0, 'id']}.png"
+        img = pil_to_tensor(Image.open(img_path)) / 255.0
+
+        first_pic = self.get_mask(img, df_ann["pixels"].iloc[0])
+        recon = tensor2submissionrow(1 - first_pic, df_ann.iloc[0].id).compute()
+        gt = df_ann["annotation"].iloc[0]
+
+        # print()
+
+        print([gt[max(i-10, i):min(i+10,i)] for i, _ in enumerate(range(len(gt))) if gt[i] == 3 and gt[min(i, i+1)] == 22])
+
+        print(first_pic.flatten()[:30])
+        print(recon.split(",")[-1].split(" ")[:10])
+        # print(gt[:10])
+
+        breakpoint()
+        # print(first_pic)
+        exit(0)
 
         # Not so random split of train and eval
         train_limit = len(df_ann) // 10
