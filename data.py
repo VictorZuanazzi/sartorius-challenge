@@ -4,6 +4,7 @@ from enum import Enum, IntEnum, auto
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
+import random
 
 import numpy as np
 import pandas as pd
@@ -18,7 +19,7 @@ from torchvision import transforms
 from torchvision.transforms.functional import InterpolationMode, pil_to_tensor
 from yamldataclassconfig import YamlDataClassConfig, build_path
 
-from generate_submissionfile import tensor2submissionrow
+from generate_submissionfile import tensor2submission
 
 
 class Partition(Enum):
@@ -126,23 +127,12 @@ class SatoriusDataset(Dataset):
         # Eval and Training data are in the same csv.
         df_train = pd.read_csv(self.path_csv)
 
-        # Convert their wierd annotation format into something useful.
+        # Convert their weird annotation format into something useful.
         # 1. group all the annotations relevant to the same image.
-        df_ann = (
-            df_train.groupby(["id", "cell_type"])["annotation"]
-            .agg(list)
-            .reset_index(drop=False)
-            .apply(lambda x: ' '.join(x))
-            .apply(lambda x: [int(item) for item in x])
-        )
-
-        # print(df_ann)
-        # exit(0)
-
-        # tensor2submissionrow()
+        df_ann = df_train.groupby(["id"])["annotation"].agg(list).reset_index(drop=False)
 
         # 2. Convert the string annotations into integers.
-        # df_ann["annotation"] = df_ann["annotation"].apply(lambda x: [int(item) for sublist in x for item in sublist.split()])
+        df_ann["annotation"] = df_ann["annotation"].apply(lambda x: [int(item) for item in ' '.join(x).split()])
 
         # 3. Convert their 'running pixel' into sequences of pixels in a flat image.
         def running_pixels(ann_):
@@ -151,30 +141,11 @@ class SatoriusDataset(Dataset):
                 for start, stroke in zip(ann_[::2], ann_[1:][::2])
             ]
 
-            breakpoint()
-
-            return [pix for start, end in start_end for pix in range(start, end)]
+            return list(set(pix for start, end in start_end for pix in range(start, end)))
 
         df_ann["pixels"] = df_ann["annotation"].apply(running_pixels)
 
-        img_path = self.path_imgs / f"{df_ann.loc[0, 'id']}.png"
-        img = pil_to_tensor(Image.open(img_path)) / 255.0
-
-        first_pic = self.get_mask(img, df_ann["pixels"].iloc[0])
-        recon = tensor2submissionrow(1 - first_pic, df_ann.iloc[0].id).compute()
-        gt = df_ann["annotation"].iloc[0]
-
-        # print()
-
-        print([gt[max(i-10, i):min(i+10,i)] for i, _ in enumerate(range(len(gt))) if gt[i] == 3 and gt[min(i, i+1)] == 22])
-
-        print(first_pic.flatten()[:30])
-        print(recon.split(",")[-1].split(" ")[:10])
-        # print(gt[:10])
-
-        breakpoint()
-        # print(first_pic)
-        exit(0)
+        # self.test_consistency(df_ann, running_pixels)  # only uncomment when unsure
 
         # Not so random split of train and eval
         train_limit = len(df_ann) // 10
@@ -184,6 +155,36 @@ class SatoriusDataset(Dataset):
 
         if self.partition == Partition.Eval:
             return df_ann[-train_limit:].reset_index(inplace=False)
+
+    def test_consistency(self, df_ann, running_pixels, test_size=50):
+        """
+        Makes sure that we can recreate the original data using our data transformation methods
+        Args:
+            df_ann:
+            running_pixels:
+
+        Returns:
+
+        """
+        for test_n in range(test_size):
+
+            print(f"{test_n=}")
+            index = random.randint(0, len(df_ann)-1)
+
+            # Load image
+            img_path = self.path_imgs / f"{df_ann.loc[index, 'id']}.png"
+            img = pil_to_tensor(Image.open(img_path)) / 255.0
+
+            mask = self.get_mask(
+                img, df_ann.loc[index, "pixels"]
+            )
+
+            reconstructed_annotation = tensor2submission(mask, start_index=1)
+
+            reconstructed_pixels = sorted(running_pixels([int(x) for x in reconstructed_annotation.split()]))
+            original_pixels = sorted(df_ann.loc[index, "pixels"])
+            assert (reconstructed_pixels == original_pixels), f"{img_path} proved not identical"
+        print("Consistency tested")
 
     def get_sampling_weights(self, strategy: SamplingStrategy) -> List[float]:
         """Different sampling strategies.

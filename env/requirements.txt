@@ -6,4 +6,3 @@ torch~=1.10
 torchvision~=0.11.0
 pytorch-lightning~=1.5.2
 yamldataclassconfig~=1.5.0
-dask
