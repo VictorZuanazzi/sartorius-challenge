@@ -1,4 +1,4 @@
-nFROM pytorch/pytorch:1.10.0-cuda11.3-cudnn8-devel
+FROM pytorch/pytorch:1.10.0-cuda11.3-cudnn8-devel
 
 RUN apt upgrade -y
 
