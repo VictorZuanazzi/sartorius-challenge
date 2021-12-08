@@ -2,8 +2,10 @@ from typing import List
 
 import numpy as np
 import torch
+from torch import no_grad
 
 
+@no_grad()
 def generate_submission(tensors: List[torch.Tensor], identifications: List[str], start_index: int = 0) -> str:
     """ generates a csv as string for a submission """
     assert len(identifications) == len(tensors), "lengths should be equal"
@@ -14,6 +16,7 @@ def generate_submission(tensors: List[torch.Tensor], identifications: List[str],
            )
 
 
+@no_grad()
 def tensor2submission(mask: torch.Tensor, use_while_loop=True, start_index=0):
     """ generates mask annotation for submission """
 
@@ -78,11 +81,13 @@ def tensor2submission(mask: torch.Tensor, use_while_loop=True, start_index=0):
     return result[:-1]
 
 
+@no_grad()
 def _tensor2submission_row(mask: torch.Tensor, image_id: str, start_index=0) -> str:
     """ creates scv row out of id and submission annotation """
     return f"{image_id}," + tensor2submission(mask, start_index=start_index)
 
 
+@no_grad()
 def save_submission(filename: str, tensors: List[torch.Tensor], identifications: List[str], start_index: int = 0):
     """ saves submissionfile based on mask tensors, ids and filepath """
     content = generate_submission(tensors, identifications, start_index=start_index)
