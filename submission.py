@@ -7,11 +7,10 @@ from torchvision.transforms.functional import pil_to_tensor
 from torchvision.utils import save_image, make_grid
 from model import DeepLabSegmeter, Backbone
 
-from main import SartoriousSegmentation, Configuration
+# from main import SartoriousSegmentation, Configuration
 from generate_submissionfile import save_submission
 
 # os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-
 
 testset_root = Path("../data/test")
 pred_path = Path("../preds/")
@@ -19,8 +18,8 @@ pred_path.mkdir(parents=True, exist_ok=True)
 
 config_path = Path("config_train_0.yaml")
 
-# model_file_path = Path("./checkpoint/last.ckpt")
-model_file_path = Path('../lightning_logs/version_11/checkpoints/last.ckpt')
+model_file_path = Path("./checkpoint/last.pt")
+# model_file_path = Path('../lightning_logs/version_11/checkpoints/last.ckpt')
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -35,17 +34,22 @@ model_ = DeepLabSegmeter(
             heads_global=None,
         )
 
-model = SartoriousSegmentation.load_from_checkpoint(str(model_file_path),
-                                                    model=model_
-                                                    )
+
+model_.load_state_dict(torch.load(model_file_path))
+model = model_
+# model = SartoriousSegmentation.load_from_checkpoint(str(model_file_path),
+#                                                     model=model_
+#                                                     )
 model.to(device)
+model.eval()
 
 masks_in_a_nice_list = []
 img_name_in_a_nice_list = []
 for img_name in os.listdir(testset_root):
     img_ = pil_to_tensor(Image.open(testset_root / img_name)) / 255.0
     img = img_.to(device).unsqueeze(0)
-    pred_ = model.model(torch.cat([img] * 2, dim=0))
+    # pred_ = model.model(torch.cat([img] * 2, dim=0))
+    pred_ = model(torch.cat([img] * 2, dim=0))
 
     pred = pred_['mask'][0:1]
 
