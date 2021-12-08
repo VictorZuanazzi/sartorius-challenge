@@ -4,15 +4,14 @@ import numpy as np
 import torch
 from torch import Tensor, nn, no_grad
 
-no_grad()
 
-
+@no_grad()
 def calculate_acc(pred: Tensor, gt: Tensor) -> Tensor:
     return ((pred.sigmoid() > 0.5) == gt.bool()).float().mean()
 
 
 def _calculate_binary_prep(
-    pred: Tensor, gt: Tensor, threshold: float = -1.0, weights: Tensor = None
+        pred: Tensor, gt: Tensor, threshold: float = -1.0, weights: Tensor = None
 ) -> Tuple[Tensor, Tensor]:
     """Helper method used for IoU and DICE calculations.
 
@@ -96,7 +95,7 @@ def calculate_competion_iou(pred: Tensor, gt: Tensor) -> Tensor:
 
 
 def calculate_binary_dice(
-    pred: Tensor, gt: Tensor, threshold: float = -1, weights: Tensor = None
+        pred: Tensor, gt: Tensor, threshold: float = -1, weights: Tensor = None
 ) -> Tensor:
     """Calculate dice score of the batch.
 

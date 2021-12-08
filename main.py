@@ -12,11 +12,20 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from yamldataclassconfig import YamlDataClassConfig, build_path
 
-from data import (DataloaderConfig, DataloaderGlobalConfig, DataOutputs,
-                  GenericDataModule)
-from metrics import (bce_weighted, calculate_acc, calculate_binary_dice,
-                     calculate_competion_iou, calculate_iou,
-                     inverse_frequency_weighting)
+from data import (
+    DataloaderConfig,
+    DataloaderGlobalConfig,
+    DataOutputs,
+    GenericDataModule,
+)
+from metrics import (
+    bce_weighted,
+    calculate_acc,
+    calculate_binary_dice,
+    calculate_competion_iou,
+    calculate_iou,
+    inverse_frequency_weighting,
+)
 from model import DeepLabSegmeter, ModelConfiguration
 from visualization import visualize_intersection
 
@@ -47,7 +56,7 @@ class SartoriousSegmentation(pl.LightningModule):
 
         :warning: **This method was not implemented for the purposes of the challenge yet.**
         """
-
+        breakpoint()
         return self.model(x)
 
     def log_images(
@@ -219,6 +228,7 @@ class Configuration(YamlDataClassConfig):
 
     @staticmethod
     def load_from_config_file(path: Union[Path, str]) -> ["Configuration"]:
+        breakpoint()
         config = Configuration()
         config.FILE_PATH = build_path(path)
         config.load(path=path)

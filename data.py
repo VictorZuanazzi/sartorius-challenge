@@ -11,8 +11,7 @@ import pandas as pd
 import pytorch_lightning as pl
 import torch
 from PIL import Image
-from pytorch_lightning.utilities.types import (EVAL_DATALOADERS,
-                                               TRAIN_DATALOADERS)
+from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS
 from torch import Tensor, nn
 from torch.utils.data import ConcatDataset, DataLoader, Dataset, Subset
 from torchvision import transforms

@@ -4,8 +4,7 @@ from typing import Dict, Optional, Sequence
 
 import torch
 from torch import Tensor, nn
-from torchvision.models.segmentation import (deeplabv3_resnet50,
-                                             deeplabv3_resnet101)
+from torchvision.models.segmentation import deeplabv3_resnet50, deeplabv3_resnet101
 from yamldataclassconfig import YamlDataClassConfig
 
 
