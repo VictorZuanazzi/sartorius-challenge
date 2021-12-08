@@ -117,7 +117,7 @@ class SatoriusDataset(Dataset):
         else:
             self.outputs = set(outputs)
 
-    def load_csv(self) -> None:
+    def load_csv(self) -> pd.DataFrame:
 
         # The test partition has no annotation data!
         if self.partition == Partition.Test:
