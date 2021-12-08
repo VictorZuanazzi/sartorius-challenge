@@ -129,7 +129,7 @@ class SatoriusDataset(Dataset):
 
         # Convert their weird annotation format into something useful.
         # 1. group all the annotations relevant to the same image.
-        df_ann = df_train.groupby(["id"])["annotation"].agg(list).reset_index(drop=False)
+        df_ann = df_train.groupby(["id", "cell_type"])["annotation"].agg(list).reset_index(drop=False)
 
         # 2. Convert the string annotations into integers.
         df_ann["annotation"] = df_ann["annotation"].apply(lambda x: [int(item) for item in ' '.join(x).split()])
@@ -145,7 +145,7 @@ class SatoriusDataset(Dataset):
 
         df_ann["pixels"] = df_ann["annotation"].apply(running_pixels)
 
-        # self.test_consistency(df_ann, running_pixels)  # only uncomment when unsure
+        self.test_consistency(df_ann, running_pixels)  # only uncomment when unsure
 
         # Not so random split of train and eval
         train_limit = len(df_ann) // 10
