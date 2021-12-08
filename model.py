@@ -108,7 +108,6 @@ class DeepLabSegmeter(nn.Module):
     def forward_global(
         self, x: Tensor, heads: Sequence[str] = None
     ) -> Dict[str, Tensor]:
-        breakpoint()
         z_ = self.main_model.backbone(self.input_layer(x))["out"].mean(dim=(-1, -2))
 
         heads = self.heads_global.keys() if heads is None else heads
