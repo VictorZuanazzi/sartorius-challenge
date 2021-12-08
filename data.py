@@ -145,7 +145,7 @@ class SatoriusDataset(Dataset):
 
         df_ann["pixels"] = df_ann["annotation"].apply(running_pixels)
 
-        self.test_consistency(df_ann, running_pixels)  # only uncomment when unsure
+        # self.test_consistency(df_ann, running_pixels)  # only uncomment when unsure
 
         # Not so random split of train and eval
         train_limit = len(df_ann) // 10
