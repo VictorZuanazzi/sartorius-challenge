@@ -22,7 +22,7 @@ def tensor2submission(mask: torch.Tensor, use_while_loop=True, start_index=0):
 
     # setup
     result = ""
-    flat_mask = (mask.flatten() >= (1 - 1e-6)).bool().numpy()
+    flat_mask = (mask.sigmoid() > 0.5).flatten().numpy().bool().numpy()
     original_length = len(flat_mask) - 1
     recording = flat_mask[0] == 11
 
